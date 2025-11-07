@@ -5,6 +5,7 @@ import json
 from urllib.request import urlopen
 from urllib.error import URLError
 import graphviz
+from collections import deque
 
 CONFIG_SCHEMA = {
     'package_name': {'type': str, 'required': True, 'validator': lambda v: bool(v), 'error_msg': "Имя пакета не может быть пустым."},
@@ -47,7 +48,7 @@ def load_and_validate_config(file_path):
         value = raw_value
         
         if schema.get('type') == int and raw_value:
-            try:
+            try:    
                 value = int(value)
             except ValueError:
                 raise ValueError(f"Ошибка параметра '{key}': Ожидался тип int, получено '{raw_value}'.")
@@ -142,17 +143,14 @@ def build_dependency_graph_dfs(
 
     filter_sub = params['filter_substring']
     if filter_sub and filter_sub in package_name:
-        print(f"Пакет '{package_name}' пропущен (содержит '{filter_sub}').")
         return
 
     viz_graph.node(package_name)
 
     if package_name in visited:
-        print(f"Обнаружен цикл: {package_name}")
         return
 
     if current_depth >= params['max_depth']:
-        print(f"Достигнута макс. глубина ({params['max_depth']}) на пакете '{package_name}'.")
         return
         
     if package_name in resolved_packages:
@@ -187,6 +185,49 @@ def build_dependency_graph_dfs(
     resolved_packages.add(package_name)
 
 
+def _dfs_sort(node, graph, visited, recursion_stack, load_order):
+    if node not in graph:
+        if node not in visited:
+             load_order.appendleft(node)
+        visited.add(node)
+        return
+
+    visited.add(node)
+    recursion_stack.add(node)
+
+    for dependency in graph[node]:
+        if dependency not in visited:
+            _dfs_sort(dependency, graph, visited, recursion_stack, load_order)
+        elif dependency in recursion_stack:
+            raise ValueError(f"Обнаружен цикл! Зависимость {node} -> {dependency} не может быть разрешена.")
+
+    recursion_stack.remove(node)
+    load_order.appendleft(node)
+
+
+def get_dependency_load_order(start_node, graph):
+    
+    all_nodes = set(graph.keys())
+    for deps in graph.values():
+        all_nodes.update(deps)
+    
+    if start_node not in all_nodes:
+        print(f"Ошибка: Стартовый пакет '{start_node}' не найден в построенном графе.")
+        return []
+
+    load_order = deque()
+    visited = set()
+    recursion_stack = set()
+
+    try:
+        _dfs_sort(start_node, graph, visited, recursion_stack, load_order)
+    except ValueError as e:
+        print(f"Ошибка: {e}")
+        return []
+
+    return list(load_order)
+
+
 def main():
     CONFIG_FILE = 'config.csv'
 
@@ -194,7 +235,6 @@ def main():
         params = load_and_validate_config(CONFIG_FILE)
 
         if params['repo_mode'] == 'test_file':
-            print("\n--- Режим 'test_file' ---")
             try:
                 test_file_name = input("Введите имя JSON-файла для тестового графа: ")
                 
@@ -202,13 +242,11 @@ def main():
                     raise FileNotFoundError(f"Файл '{test_file_name}' не найден в текущей директории.")
                 
                 params['repo_source'] = test_file_name
-                print(f"Используется файл: {params['repo_source']}")
                 
                 test_pkg_name = input("Введите имя стартового пакета: ")
                 if not test_pkg_name:
                      raise ValueError("Имя стартового пакета не может быть пустым.")
                 params['package_name'] = test_pkg_name
-                print(f"Стартовый пакет: {params['package_name']}")
             
             except (FileNotFoundError, ValueError, EOFError) as e:
                 print(f"\n{e}")
@@ -257,10 +295,20 @@ def main():
             visited=visited_path,
             resolved_packages=resolved_nodes
         )
+        
+        printable_graph = {k: list(v) for k, v in graph_adj_list.items()}
+        print(printable_graph)
+
+
+        load_order = get_dependency_load_order(params['package_name'], graph_adj_list)
+        if load_order:
+            print(" -> ".join(load_order))
+
 
         output_filename = 'dependency_graph'
         try:
             viz_graph.render(output_filename, view=False, format='png', cleanup=True)
+            print(f"\n[Info] Граф визуализирован в файл '{output_filename}.png'")
 
         except Exception as e:
             print(f"\nНе удалось сгенерировать изображение графа: {e}")
