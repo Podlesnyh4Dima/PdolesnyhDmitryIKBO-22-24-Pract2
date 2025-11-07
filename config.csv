@@ -1,6 +1,6 @@
-package_name,express
-repo_source,https://registry.npmjs.org/
-repo_mode,real
+package_name,A
+repo_source,test_graph1.json
+repo_mode,test_file
 package_version,latest
 max_depth,10
-filter_substring,body
+filter_substring,
