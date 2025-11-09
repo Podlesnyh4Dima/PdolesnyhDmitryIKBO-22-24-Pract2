@@ -1,0 +1,10 @@
+{
+  "WebApp": ["ApiLayer", "AuthService", "Logger", "common-utils"],
+  "ApiLayer": ["Database", "Logger", "common-types"],
+  "AuthService": ["Database", "Logger", "JwtParser"],
+  "Database": ["Logger"],
+  "Logger": [],
+  "JwtParser": ["common-types"],
+  "common-utils": ["common-types"],
+  "common-types": []
+}
