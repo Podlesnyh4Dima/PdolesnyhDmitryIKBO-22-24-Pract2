@@ -227,6 +227,49 @@ def get_dependency_load_order(start_node, graph):
 
     return list(load_order)
 
+def generate_mermaid_output(graph_adj_list, start_node):
+    mermaid_lines = ["graph TD;"] 
+    
+    
+    
+    queue = deque([start_node])
+    visited_edges = set()
+    
+    
+    all_nodes = set(graph_adj_list.keys())
+    for children in graph_adj_list.values():
+        all_nodes.update(children)
+
+    
+    if start_node not in graph_adj_list and start_node in all_nodes:
+         mermaid_lines.append(f"    {start_node};")
+
+    processed_nodes = set()
+
+    
+    nodes_to_process = deque(graph_adj_list.keys())
+    
+    while nodes_to_process:
+        parent = nodes_to_process.popleft()
+        if parent in processed_nodes:
+            continue
+        
+        processed_nodes.add(parent)
+        
+        children = graph_adj_list.get(parent)
+        
+        if children:
+            for child in children:
+                edge = (parent, child)
+                if edge not in visited_edges:
+                    mermaid_lines.append(f"    {parent} --> {child};")
+                    visited_edges.add(edge)
+        elif parent in all_nodes:
+            
+            mermaid_lines.append(f"    {parent};")
+
+    return "\n".join(mermaid_lines)
+
 
 def main():
     CONFIG_FILE = 'config.csv'
@@ -304,6 +347,8 @@ def main():
         if load_order:
             print(" -> ".join(load_order))
 
+        mermaid_text = generate_mermaid_output(graph_adj_list, params['package_name'])
+        print(mermaid_text)
 
         output_filename = 'dependency_graph'
         try:
